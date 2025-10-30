@@ -1,0 +1,183 @@
+{
+  "name": "Extract Football Leagues",
+  "nodes": [
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.firecrawl.dev/v1/extract",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer fc-fa2a7fa7813c472cbf8ffc8ddc7d285f"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "{\n  \"urls\": [\n    \"https://www.footballwebpages.co.uk/\"\n  ],\n  \"prompt\": \"Extract the names and full URLs of all English football leagues from Step 1 to Step 6 listed on the homepage of FootballWebPages. Only include the pyramid leagues such as National League, Northern Premier League, Isthmian League, Southern League, etc. Do not include friendlies or women’s competitions.\",\n  \"schema\": {\n    \"type\": \"object\",\n    \"properties\": {\n      \"leagues\": {\n        \"type\": \"array\",\n        \"items\": {\n          \"type\": \"object\",\n          \"properties\": {\n            \"name\": {\n              \"type\": \"string\"\n            },\n            \"url\": {\n              \"type\": \"string\"\n            }\n          },\n          \"required\": [\n            \"name\",\n            \"url\"\n          ]\n        }\n      }\n    },\n    \"required\": [\n      \"leagues\"\n    ]\n  },\n  \"agent\": {\n    \"model\": \"FIRE-1\"\n  }\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -816,
+        -48
+      ],
+      "id": "6a09ff83-3b8e-40e2-8fee-d2772d1b3386",
+      "name": "HTTP Request"
+    },
+    {
+      "parameters": {
+        "url": "https://api.firecrawl.dev/v1/extract/3538078a-65e3-47a0-a749-46565971e29b",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer fc-10b8b978d0aa44daa4405ba35a3af7d7"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -576,
+        -48
+      ],
+      "id": "f6099b8d-f6b0-41f8-a243-08f1a5ea2925",
+      "name": "HTTP Request1"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Code Node: Create JSON with all Step 1–6 leagues\nconst leagues = [\n  { name: \"National League\", url: \"https://www.footballwebpages.co.uk/national-league\" },\n  { name: \"National League North\", url: \"https://www.footballwebpages.co.uk/national-league-north\" },\n  { name: \"National League South\", url: \"https://www.footballwebpages.co.uk/national-league-south\" },\n  { name: \"Northern Premier League - Premier\", url: \"https://www.footballwebpages.co.uk/northern-premier-league-premier-division\" },\n  { name: \"Isthmian League - Premier\", url: \"https://www.footballwebpages.co.uk/isthmian-football-league-premier-division\" },\n  { name: \"Southern League - Premier Central\", url: \"https://www.footballwebpages.co.uk/southern-football-league-premier-central-division\" },\n  { name: \"Southern League - Premier South\", url: \"https://www.footballwebpages.co.uk/southern-football-league-premier-south-division\" },\n  { name: \"Northern Premier League - East\", url: \"https://www.footballwebpages.co.uk/northern-premier-league-east-division\" },\n  { name: \"Northern Premier League - Midlands\", url: \"https://www.footballwebpages.co.uk/northern-premier-league-midlands-division\" },\n  { name: \"Northern Premier League - West\", url: \"https://www.footballwebpages.co.uk/northern-premier-league-west-division\" },\n  { name: \"Isthmian League - North\", url: \"https://www.footballwebpages.co.uk/isthmian-football-league-north-division\" },\n  { name: \"Isthmian League - South Central\", url: \"https://www.footballwebpages.co.uk/isthmian-football-league-south-central-division\" },\n  { name: \"Isthmian League - South East\", url: \"https://www.footballwebpages.co.uk/isthmian-football-league-south-east-division\" },\n  { name: \"Southern League - Central\", url: \"https://www.footballwebpages.co.uk/southern-football-league-division-one-central\" },\n  { name: \"Southern League - South\", url: \"https://www.footballwebpages.co.uk/southern-football-league-division-one-south\" },\n  { name: \"Combined Counties - Premier North\", url: \"https://www.footballwebpages.co.uk/combined-counties-league-premier-division-north\" },\n  { name: \"Combined Counties - Premier South\", url: \"https://www.footballwebpages.co.uk/combined-counties-league-premier-division-south\" },\n  { name: \"Essex Senior League\", url: \"https://www.footballwebpages.co.uk/essex-senior-league\" },\n  { name: \"Northern League - Division One\", url: \"https://www.footballwebpages.co.uk/northern-league-division-one\" },\n  { name: \"N Counties East - Premier Division\", url: \"https://www.footballwebpages.co.uk/northern-counties-east-league-premier-division\" },\n  { name: \"S Counties East - Premier Division\", url: \"https://www.footballwebpages.co.uk/southern-counties-east-league-premier-division\" },\n  { name: \"United Counties - Premier North\", url: \"https://www.footballwebpages.co.uk/united-counties-league-premier-division-north\" },\n  { name: \"United Counties - Premier South\", url: \"https://www.footballwebpages.co.uk/united-counties-league-premier-division-south\" },\n  { name: \"Combined Counties - Division One\", url: \"https://www.footballwebpages.co.uk/combined-counties-league-division-one\" },\n  { name: \"Northern League - Division Two\", url: \"https://www.footballwebpages.co.uk/northern-league-division-two\" },\n  { name: \"N Counties East - Division One\", url: \"https://www.footballwebpages.co.uk/northern-counties-east-league-division-one\" },\n  { name: \"S Counties East - First Division\", url: \"https://www.footballwebpages.co.uk/southern-counties-east-league-first-division\" },\n  { name: \"United Counties - Division One\", url: \"https://www.footballwebpages.co.uk/united-counties-league-division-one\" }\n];\n\n// Return one item with the stringified array\nreturn [\n  {\n    json: {\n      data: JSON.stringify(leagues, null, 2)\n    }\n  }\n];\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -144,
+        -48
+      ],
+      "id": "430ea37e-e266-48c9-b78e-bbe3fd61cc62",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "operation": "toText",
+        "sourceProperty": "data",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.convertToFile",
+      "typeVersion": 1.1,
+      "position": [
+        80,
+        -48
+      ],
+      "id": "7ba9bfa1-4d91-42fc-985e-9e71b708b6bd",
+      "name": "Convert to File"
+    },
+    {
+      "parameters": {
+        "jsCode": "return $json[\"data\"][\"leagues\"].map(item => ({ json: item }));\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -368,
+        -48
+      ],
+      "id": "37af2b92-9f67-4ca5-9a9a-ad149376e70e",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 12
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -1056,
+        -48
+      ],
+      "id": "42e59e41-c0ec-4e02-9507-c6d26b8040c7",
+      "name": "Schedule Trigger"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "HTTP Request": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "HTTP Request1": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Convert to File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "HTTP Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "7b02623f-fe22-416b-b0a6-8cc719114fc2",
+  "meta": {
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "fnv98ya9VMXj8IvX",
+  "tags": []
+}

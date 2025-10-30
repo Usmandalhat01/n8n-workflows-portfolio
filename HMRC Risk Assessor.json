@@ -1,0 +1,143 @@
+{
+  "name": "HMRC Risk Assessor",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "f7e83e52-e1fc-40d1-92e5-50cfbf2e28f0",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.cron",
+      "typeVersion": 1,
+      "position": [
+        -400,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  cd.number AS company_number,\n  cd.name AS company_name,\n  cd.category AS company_type,\n  cd.sic_text_1 AS sic_codes,\n  MAX(gj.judgment_date) AS latest_ccj_date,\n  COUNT(*) AS ccj_count\nFROM \n  company_details cd\nJOIN \n  gcs_judgments gj \n  ON gj.title COLLATE utf8mb4_unicode_ci LIKE CONCAT(cd.name COLLATE utf8mb4_unicode_ci, '%')\nWHERE \n  cd.status = 'active'\n  AND gj.judgment_date >= CURDATE() - INTERVAL 2 YEAR\nGROUP BY \n  cd.number, cd.name, cd.category, cd.sic_text_1\nHAVING \n  ccj_count > 0\nORDER BY \n  latest_ccj_date DESC\nLIMIT 500;\n",
+        "options": {}
+      },
+      "id": "74a89ea1-e9a1-4822-8e32-25d8af53d485",
+      "name": "Get Active Companies with CCJs",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2,
+      "position": [
+        -208,
+        0
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM hmrc_enforcement_patterns_n8n WHERE enforcement_type = 'Winding-up petition' AND trigger_event_type = 'CCJ' ORDER BY created_date DESC LIMIT 1;",
+        "options": {}
+      },
+      "id": "033a96b5-2d9f-404a-992e-1497e4f3b90d",
+      "name": "Get HMRC Pattern",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2,
+      "position": [
+        0,
+        0
+      ],
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "const companies = items[0].json;\nconst pattern = items[1].json[0];\nconst today = new Date();\nconst hmrcRisks = companies.map(company => {\n  const latestCcjDate = new Date(company.latest_ccj_date);\n  const daysSinceLatestCcj = Math.round((today - latestCcjDate) / (1000 * 60 * 60 * 24));\n  let riskScore = 0;\n  riskScore += Math.min(company.ccj_count * 15, 50);\n  if (daysSinceLatestCcj < pattern.min_days_to_action) {\n    riskScore *= 0.5;\n  } else if (daysSinceLatestCcj > pattern.max_days_to_action) {\n    riskScore *= 0.7;\n  } else if (daysSinceLatestCcj >= pattern.min_days_to_action && daysSinceLatestCcj <= pattern.avg_days_to_action) {\n    riskScore *= 1 + ((daysSinceLatestCcj - pattern.min_days_to_action) / (pattern.avg_days_to_action - pattern.min_days_to_action)) * 0.5;\n  } else if (daysSinceLatestCcj > pattern.avg_days_to_action) {\n    riskScore *= 1.5 - ((daysSinceLatestCcj - pattern.avg_days_to_action) / (pattern.max_days_to_action - pattern.avg_days_to_action)) * 0.5;\n  }\n  let riskCategory = 'Low';\n  if (riskScore > 70) {\n    riskCategory = 'Critical';\n  } else if (riskScore > 40) {\n    riskCategory = 'High';\n  } else if (riskScore > 20) {\n    riskCategory = 'Medium';\n  }\n  let daysToAction = null;\n  if (riskScore > 20) {\n    if (daysSinceLatestCcj < pattern.avg_days_to_action) {\n      daysToAction = pattern.avg_days_to_action - daysSinceLatestCcj;\n    } else {\n      daysToAction = 0;\n    }\n  }\n  const confidenceScore = Math.min(riskScore / 100, 0.95);\n  return {\n    company_id: company.company_number,\n    company_name: company.company_name,\n    risk_score: riskScore,\n    risk_category: riskCategory,\n    predicted_action: riskScore > 20 ? 'Winding-up petition' : null,\n    days_to_action: daysToAction,\n    confidence_score: confidenceScore,\n    assessment_date: today.toISOString().slice(0, 10)\n  };\n});\nreturn hmrcRisks.map(risk => ({ json: risk }));"
+      },
+      "id": "ecc2d0c2-e3cb-4d79-b138-32d8bdc5d619",
+      "name": "Calculate HMRC Risk",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        208,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "table": "hmrc_risk_indicators",
+        "options": {}
+      },
+      "id": "559849ed-280e-4aff-af1e-b34af6fca35d",
+      "name": "Insert HMRC Risk Indicators",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2,
+      "position": [
+        384,
+        0
+      ]
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Get Active Companies with CCJs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Active Companies with CCJs": {
+      "main": [
+        [
+          {
+            "node": "Get HMRC Pattern",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate HMRC Risk": {
+      "main": [
+        [
+          {
+            "node": "Insert HMRC Risk Indicators",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get HMRC Pattern": {
+      "main": [
+        [
+          {
+            "node": "Calculate HMRC Risk",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "fcc717fe-b994-48eb-b06a-c8bfd9b4c127",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "cGT3SGB5yQjhhdnw",
+  "tags": []
+}

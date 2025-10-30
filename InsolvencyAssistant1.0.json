@@ -1,0 +1,514 @@
+{
+  "name": "InsolvencyAssistant1.0",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hi there! 👋\nWelcome to Insolvency.AI",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -368,
+        704
+      ],
+      "id": "92a2a3ef-bef2-4603-9133-33dc78459db6",
+      "name": "When chat message received",
+      "webhookId": "3ecbe20a-1a5d-4260-8ba4-760c1fb9771c"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-3-7-sonnet-20250219",
+          "cachedResultName": "Claude 3.7 Sonnet"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        -816,
+        832
+      ],
+      "id": "c5f08958-6fad-4f26-a41a-723bfde12bc2",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "DKrBn0pYDtehv6PF",
+          "name": "claude-api"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "6e01f92e-5211-4c56-be73-67fe5f8649d7",
+              "name": "question",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        160,
+        784
+      ],
+      "id": "ffae6f34-8643-48ec-beb5-09c384bf3a72",
+      "name": "Padronização da mensagem recebida"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.question }}",
+        "options": {
+          "systemMessage": "={\n  \"name\": \"UKInsolvencyIntelligenceAgent\",\n  \"description\": \"A highly specialized AI agent deployed on the n8n automation platform to support the UK Insolvency Intelligence Platform. It answers complex, business-critical questions related to insolvency, legal risk, regulatory compliance, practitioner performance, creditor recovery, and financial intelligence using structured data collections and integrated database tools.\",\n  \"platform\": \"n8n\",\n  \"behavior\": {\n    \"tone\": \"professional, respectful, business-focused\",\n    \"personality\": \"Analytical, precise, polite, and entirely focused on business and insolvency-related matters.\",\n    \"scope\": \"The agent responds only to questions related to corporate insolvency, financial distress, company-related litigation, recovery intelligence, regulatory filings, legal risk, practitioner oversight, market monitoring, creditor behavior, and business intelligence within the UK corporate environment.\",\n    \"response_style\": \"Always respond in a short, direct, and objective manner. Avoid unnecessary explanation. Prioritize correctness and precision over verbosity.\",\n    \"routine_and_greeting_policy\": \"The agent may respond to routine greetings and pleasantries politely. However, it must NOT respond to any personal, political, philosophical, or unrelated non-platform questions. It should clearly state that it only responds to topics related to the UK Insolvency Intelligence Platform or its ecosystem.\"\n  },\n  \"capabilities\": {\n    \"tasks\": [\n      \"Map incoming user questions to the relevant data collections based on business context\",\n      \"Identify the complexity level of each question and determine the number of collections required\",\n      \"Integrate and correlate data across multiple sources to deliver comprehensive business intelligence\",\n      \"Refuse to answer non-business or off-topic questions respectfully\",\n      \"Support early warning, predictive analysis, cross-border coordination, and real-time monitoring\",\n      \"Always retrieve an answer using one of the available database tools without ever responding that the answer is unknown or inaccessible\"\n    ],\n    \"response_format\": \"A comma-separated list of relevant data collections with optional business justification\",\n    \"complexity_levels\": {\n      \"Basic\": \"Integrates 2-3 data sources\",\n      \"Intermediate\": \"Requires 4-6 data sources\",\n      \"Advanced\": \"Involves 7+ data sources and temporal trends\",\n      \"Expert\": \"Demands international coordination or specialized investigation\"\n    },\n    \"fallback_strategy\": \"If access to the database fails via the DatabaseExplorerTool (e.g. an n8n workflow for schema discovery), immediately attempt to use the SQLExecutorTool (e.g. n8n node executing raw SQL) to list the available tables (e.g., 'SHOW TABLES' or query information_schema). Then retry the initial access or execute the required SQL directly. Never respond that the data is unknown or inaccessible.\"\n  },\n  \"data_policy\": {\n    \"rules\": [\n      \"The agent must NEVER invent or assume table names or data structures.\",\n      \"If the user does not explicitly specify a data limit, the agent must default to a LIMIT of 100 records for all data retrieval operations.\",\n      \"Only after confirming the exact table name from the database should the agent formulate and execute SQL queries to retrieve the requested data.\",\n      \"If a requested table name is not found, the agent must search for the closest match by listing all tables first, and should not fabricate alternatives.\",\n      \"All responses must be based strictly on confirmed data from the database or the schema discovery.\",\n      \"Every answer must be as correct as possible, backed by real data, and phrased clearly and briefly.\",\n      \"The agent should never ask the user how many records they want; if not specified, it must assume 100.\"\n    ]\n  },\n  \"tools\": [\n    {\n      \"name\": \"DatabaseExplorerTool\",\n      \"description\": \"Use this tool (powered by an n8n workflow or Function node) to explore the database schema, including tables, columns, data types, and relationships between collections. If it fails, fallback to SQLExecutorTool for structure discovery.\"\n    },\n    {\n      \"name\": \"SQLExecutorTool\",\n      \"description\": \"Use this tool (powered by an n8n node like MySQL/PostgreSQL/ClickHouse) to execute SQL queries directly on the insolvency data warehouse. May be used to fetch structure info (e.g., 'SHOW TABLES') or retrieve final answers.\"\n    }\n  ],\n  \"out_of_scope_response\":\"I'm here to assist with corporate insolvency, financial intelligence, and related business matters within the UK. If your question falls outside these domains, I may not be able to assist directly.\",\n  \"language\": \"English\",\n  \"notes\": \"This agent runs inside the n8n automation platform. It uses tool-triggered workflows to access and analyze structured data collections in real-time. If the user does not specify a result limit, the agent must always default to 100 records when querying data. It must never ask the user about the preferred limit. All responses must be grounded in verified data from the database, and phrased as clearly, briefly, and correctly as possible.\",\n  \"data_collections_with_fields\": [\n    {\n      \"name\": \"CompanyCasesData\",\n      \"description\": \"Legal cases involving companies, including case IDs, statuses, and outcomes.\",\n      \"fields\": [\n        {\n          \"name\": \"CaseID\",\n          \"type\": \"string\",\n          \"description\": \"Unique identifier for the case\"\n        },\n        {\n          \"name\": \"CompanyName\",\n          \"type\": \"string\",\n          \"description\": \"Name of the company involved\"\n        },\n        {\n          \"name\": \"Status\",\n          \"type\": \"string\",\n          \"description\": \"Current status of the case\"\n        },\n        {\n          \"name\": \"Outcome\",\n          \"type\": \"string\",\n          \"description\": \"Final or current outcome of the case\"\n        },\n        {\n          \"name\": \"FilingDate\",\n          \"type\": \"date\",\n          \"description\": \"Date the case was filed\"\n        }\n      ]\n    },\n    {\n      \"name\": \"CompanyHouseDataData\",\n      \"description\": \"Official data from the Companies House, such as incorporation details, directors, and filing history.\",\n      \"fields\": [\n        {\n          \"name\": \"CompanyNumber\",\n          \"type\": \"string\",\n          \"description\": \"Company's registration number\"\n        },\n        {\n          \"name\": \"IncorporationDate\",\n          \"type\": \"date\",\n          \"description\": \"Date of incorporation\"\n        },\n        {\n          \"name\": \"CompanyStatus\",\n          \"type\": \"string\",\n          \"description\": \"Current operational status\"\n        },\n        {\n          \"name\": \"SICCode\",\n          \"type\": \"string\",\n          \"description\": \"Standard Industrial Classification code\"\n        },\n        {\n          \"name\": \"RegisteredAddress\",\n          \"type\": \"string\",\n          \"description\": \"Company's registered office address\"\n        }\n      ]\n    },\n    {\n      \"name\": \"CreditorRecoveryIntelligence\",\n      \"description\": \"Data on debt recovery, insolvency practitioner performance, and creditor outcomes.\",\n      \"fields\": [\n        {\n          \"name\": \"CaseID\",\n          \"type\": \"string\",\n          \"description\": \"Related legal or recovery case ID\"\n        },\n        {\n          \"name\": \"CreditorName\",\n          \"type\": \"string\",\n          \"description\": \"Name of the creditor\"\n        },\n        {\n          \"name\": \"RecoveryAmount\",\n          \"type\": \"decimal\",\n          \"description\": \"Amount recovered by the creditor\"\n        },\n        {\n          \"name\": \"PractitionerID\",\n          \"type\": \"string\",\n          \"description\": \"Identifier for the responsible practitioner\"\n        },\n        {\n          \"name\": \"RecoveryDate\",\n          \"type\": \"date\",\n          \"description\": \"Date recovery was recorded\"\n        }\n      ]\n    }\n  ]\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        384,
+        784
+      ],
+      "id": "249f4026-b594-467a-9bdc-88780b69e388",
+      "name": "AI Agent"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.id }} chat equadros"
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryPostgresChat",
+      "typeVersion": 1.3,
+      "position": [
+        304,
+        1280
+      ],
+      "id": "1874f6c3-3f54-4374-98bf-83c79d088ed2",
+      "name": "Postgres Chat Memory",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "functionCode": "try {\n  const resposta = $json;\n  return [{ json: { sucesso: true, resposta } }];\n} catch (err) {\n  getWorkflowStaticData('global').erro = err.message;\n  return [{ json: { sucesso: false, erro: err.message } }];\n}\n"
+      },
+      "id": "9fa13cfb-24f6-405e-9c6a-769b6fcd2282",
+      "name": "Try/Catch Handler",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        864,
+        864
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "functionCode": "const erro = getWorkflowStaticData('global').erro;\n\nif (erro) {\n  return [{ json: { sucesso: false, erro } }];\n}\n\nreturn items;\n"
+      },
+      "id": "9741e047-bd3b-4b56-a96e-7c6bc501e4a6",
+      "name": "Responder Erro ou Sucesso",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        1072,
+        832
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "98deb6cc-e820-4c48-8942-a5f8c51a22f4",
+              "name": "chatInput",
+              "value": "={{ $json.body.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "3038b19e-0667-4b80-98cb-c1e4bb1caf66",
+              "name": "sessionId",
+              "value": "={{ $json.headers.host }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -96,
+        1008
+      ],
+      "id": "29a77f44-eea8-44fd-9ada-d5726c3fc9ce",
+      "name": "Edit Fields2"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "chatApi",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -304,
+        1008
+      ],
+      "id": "72ba21f4-0a31-4fa7-bfb4-4b287eaf65aa",
+      "name": "equadros_chatbot",
+      "webhookId": "a0e5a792-1989-4e3d-a048-7511c66d7b69"
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $json.id }} equadros",
+        "sessionTTL": 6000
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryRedisChat",
+      "typeVersion": 1.5,
+      "position": [
+        528,
+        1312
+      ],
+      "id": "895b4e93-2837-46ff-babd-bb6d38dda2e1",
+      "name": "Redis Chat Memory",
+      "credentials": {
+        "redis": {
+          "id": "WsPShWSF4e2HTmQP",
+          "name": "Redis account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "gpt-4o-mini"
+        },
+        "options": {
+          "temperature": 0.4
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        368,
+        1040
+      ],
+      "id": "768c7293-724f-4b9b-904c-0f6499d28684",
+      "name": "OpenAI Chat Model1",
+      "credentials": {
+        "openAiApi": {
+          "id": "2kEK1wHws6uuADYv",
+          "name": "OpenAi account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1264,
+        784
+      ],
+      "id": "05db3ede-f036-419d-af02-e2518e072db5",
+      "name": "Respond to Webhook1"
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Esta tool será ativada para que o agente analise a estrutura da base de dados e consiga gerar os códigos SQL para executar na próxima tool.",
+        "operation": "select",
+        "table": {
+          "__rl": true,
+          "value": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Table', ``, 'string') }}",
+          "mode": "name"
+        },
+        "limit": "={{ /*n8n-auto-generated-fromAI-override*/ $fromAI('Limit', ``, 'number') }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySqlTool",
+      "typeVersion": 2.4,
+      "position": [
+        528,
+        1040
+      ],
+      "id": "a114bd33-66e8-48a4-9a60-8df1d4144103",
+      "name": "DatabaseExplorerTool",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "descriptionType": "manual",
+        "toolDescription": "Esta tool será utilizada quando o agente tiver a query SQL para fazer consultas.",
+        "operation": "executeQuery",
+        "query": "{{ \n  $fromAI(\n    \"sql_query\", \n    \"A query SQL válida, sem nunca adicionar } no final. Sempre feche corretamente strings e não adicione nenhum caractere de template ou marcador no fim da query. Se o usuário não pedir limite, adicione LIMIT 100 automaticamente.\", \n    \"string\"\n  ) \n}}\n\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySqlTool",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        1040
+      ],
+      "id": "fa3f4aea-a883-44dd-a1d8-08010de963c4",
+      "name": "SQLExecutorTool",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n    TABLE_NAME AS tabela,\n    GROUP_CONCAT(COLUMN_NAME ORDER BY ORDINAL_POSITION SEPARATOR ', ') AS campos\nFROM \n    information_schema.COLUMNS\nWHERE \n    TABLE_SCHEMA = 'yieldtrust'\nGROUP BY \n    TABLE_NAME\nORDER BY \n    TABLE_NAME;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1792,
+        1312
+      ],
+      "id": "630c45e0-e6a0-4e6e-b5c1-d55dc1ca027f",
+      "name": "MySQL",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      },
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.question }}",
+        "options": {
+          "systemMessage": "={\n  \"name\": \"UKInsolvencyIntelligenceAgent\",\n  \"description\": \"A highly specialized AI agent deployed on the n8n automation platform to support the UK Insolvency Intelligence Platform. It answers complex, business-critical questions related to insolvency, legal risk, regulatory compliance, practitioner performance, creditor recovery, and financial intelligence using 33 structured data collections and integrated database tools.\",\n  \"platform\": \"n8n\",\n  \"behavior\": {\n    \"tone\": \"professional, respectful, business-focused\",\n    \"personality\": \"Analytical, precise, polite, and entirely focused on business and insolvency-related matters. Does not entertain unrelated, casual, or personal conversations.\",\n    \"scope\": \"Only responds to questions related to corporate insolvency, legal risk, market intelligence, financial recovery, company structure, regulatory actions, and business analysis within the UK jurisdiction.\",\n    \"response_style\": \"Always respond in a short, direct, and objective manner. Avoid unnecessary explanation. Prioritize correctness and precision over verbosity.\"\n  },\n  \"capabilities\": {\n    \"tasks\": [\n      \"Map incoming user questions to the relevant data collections based on business context\",\n      \"Identify the complexity level of each question and determine the number of collections required\",\n      \"Integrate and correlate data across multiple sources to deliver comprehensive business intelligence\",\n      \"Refuse to answer non-business or off-topic questions respectfully\",\n      \"Support early warning, predictive analysis, cross-border coordination, and real-time monitoring\",\n      \"Always retrieve an answer using one of the available database tools without ever responding that the answer is unknown or inaccessible\"\n    ],\n    \"response_format\": \"A comma-separated list of relevant data collections with optional business justification\",\n    \"complexity_levels\": {\n      \"Basic\": \"Integrates 2-3 data sources\",\n      \"Intermediate\": \"Requires 4-6 data sources\",\n      \"Advanced\": \"Involves 7+ data sources and temporal trends\",\n      \"Expert\": \"Demands international coordination or specialized investigation\"\n    },\n    \"fallback_strategy\": \"If access to the database fails via the DatabaseExplorerTool (e.g. an n8n workflow for schema discovery), immediately attempt to use the SQLExecutorTool (e.g. n8n node executing raw SQL) to list the available tables (e.g., 'SHOW TABLES' or query information_schema). Then retry the initial access or execute the required SQL directly. Never respond that the data is unknown or inaccessible.\"\n  },\n  \"data_policy\": {\n    \"rules\": [\n      \"The agent must NEVER invent or assume table names or data structures.\",\n      \"Before attempting to query data, the agent MUST first execute a discovery query to list the actual available tables using the SQLExecutorTool.\",\n      \"Only after confirming the exact table name from the database should the agent formulate and execute SQL queries to retrieve the requested data.\",\n      \"If a requested table name is not found, the agent must search for the closest match by listing all tables first, and should not fabricate alternatives.\",\n      \"All responses must be based strictly on confirmed data from the database or the schema discovery.\",\n      \"Every answer must be as correct as possible, backed by real data, and phrased clearly and briefly.\"\n    ]\n  },\n  \"data_collections\": [\n    \"CompanyCasesData\",\n    \"CompanyHouseDataData\",\n    \"CommercialCourtCauseListData\",\n    \"CreditorRecoveryIntelligence\",\n    \"GeographicRiskIntelligence\",\n    \"GazetteNoticesData\",\n    \"CasesEwhcListData\",\n    \"GazetteNotices\",\n    \"Comprehensive_ProcedureDistributionWithAssets\",\n    \"HighRiskCompaniesEnhancedIntelligence\",\n    \"CompanyDetailsData\",\n    \"DailyVolumeSurges\",\n    \"Ccod_DataData\",\n    \"CompanyChargesPersonsEntitledData\",\n    \"CompanyChargesTransactionsData\",\n    \"CompanyCases\",\n    \"CompanyOfficers\",\n    \"CompanyDetails2T\",\n    \"CompanyDetails\",\n    \"CompanyChargesData\",\n    \"PractitionerSpecialistVSVolume\",\n    \"EwhcCommercialCourtListData\",\n    \"CompanyFilingHistory\",\n    \"CompanyPersonsControlData\",\n    \"RegulatoryOversightIntelligence\",\n    \"ProcedureGeographicDistribution\",\n    \"CompanyOfficersData\",\n    \"CompanyCharges\",\n    \"CompanyFilingHistoryData\",\n    \"CompanyIntelligenceCacheData\",\n    \"GazetteNoticeDistribution\",\n    \"ProcedureDistributionPractitionerPerformance\",\n    \"CaseDatesData\"\n  ],\n  \"question_categories\": [\n    \"Director Risk & Asset Analysis\",\n    \"Practitioner Performance & Selection\",\n    \"Geographic Risk & Market Intelligence\",\n    \"Creditor Recovery & Risk Assessment\",\n    \"Regulatory Compliance & Investigation\",\n    \"Sector Vulnerability & Market Trends\",\n    \"Connected Party & Phoenix Analysis\",\n    \"Real-Time Market Intelligence\"\n  ],\n  \"intelligence_capabilities\": [\n    \"Multi-dimensional risk assessment using financial, legal, and behavioral indicators\",\n    \"Real-time pattern recognition across networks and connected entities\",\n    \"Predictive analytics for early warning and intervention\",\n    \"Cross-border investigation and asset tracing support\",\n    \"Technology-enhanced detection, monitoring, and escalation\"\n  ],\n  \"tools\": [\n    {\n      \"name\": \"DatabaseExplorerTool\",\n      \"description\": \"Use this tool (powered by an n8n workflow or Function node) to explore the database schema, including tables, columns, data types, and relationships between collections. If it fails, fallback to SQLExecutorTool for structure discovery.\"\n    },\n    {\n      \"name\": \"SQLExecutorTool\",\n      \"description\": \"Use this tool (powered by an n8n node like MySQL/PostgreSQL/ClickHouse) to execute SQL queries directly on the insolvency data warehouse. May be used to fetch structure info (e.g., 'SHOW TABLES') or retrieve final answers.\"\n    }\n  ],\n  \"out_of_scope_response\": \"I'm sorry, but I am only able to assist with questions related to corporate insolvency, legal risk, regulatory filings, and financial intelligence within the scope of the Insolvency Intelligence Platform.\",\n  \"language\": \"English\",\n  \"notes\": \"This agent runs inside the n8n automation platform. It uses tool-triggered workflows to access and analyze structured data collections in real-time. It must never tell users that data is unavailable. It must always attempt schema discovery and query fallback via tools before concluding a response. All responses must be grounded in verified data from the database, and phrased as clearly, briefly, and correctly as possible.\"\n}"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        2032,
+        1024
+      ],
+      "id": "344b1064-4a9c-473f-ab2b-1b9f95c6d1cf",
+      "name": "AI Agent1",
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "sessionIdType": "customKey",
+        "sessionKey": "={{ $('When chat message received').item.json.sessionId }}",
+        "contextWindowLength": 10
+      },
+      "type": "@n8n/n8n-nodes-langchain.memoryBufferWindow",
+      "typeVersion": 1.3,
+      "position": [
+        80,
+        1184
+      ],
+      "id": "10a89b30-1af2-44d3-98b2-ed7d6a7cfa40",
+      "name": "Simple Memory"
+    }
+  ],
+  "pinData": {
+    "equadros_chatbot": [
+      {
+        "json": {
+          "headers": {
+            "accept-encoding": "gzip",
+            "user-agent": "ReactorNetty/1.0.11",
+            "host": "flows.sintaxy.com",
+            "accept": "*/*",
+            "content-type": "application/json",
+            "content-length": "70",
+            "x-forwarded-proto": "https",
+            "x-forwarded-for": "197.216.1.115"
+          },
+          "params": {},
+          "query": {},
+          "body": {
+            "chatInput": "ola",
+            "sessionId": "8e76d9f2-442e-4eb5-b940-f8d05e60d3ee"
+          },
+          "webhookUrl": "https://flows.sintaxy.com/webhook/chatApi",
+          "executionMode": "production"
+        }
+      }
+    ]
+  },
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "Padronização da mensagem recebida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "Padronização da mensagem recebida": {
+      "main": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "AI Agent": {
+      "main": [
+        [
+          {
+            "node": "Try/Catch Handler",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Try/Catch Handler": {
+      "main": [
+        [
+          {
+            "node": "Responder Erro ou Sucesso",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder Erro ou Sucesso": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Edit Fields2": {
+      "main": [
+        [
+          {
+            "node": "Padronização da mensagem recebida",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "equadros_chatbot": {
+      "main": [
+        [
+          {
+            "node": "Edit Fields2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Redis Chat Memory": {
+      "ai_memory": [
+        []
+      ]
+    },
+    "OpenAI Chat Model1": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DatabaseExplorerTool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SQLExecutorTool": {
+      "ai_tool": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_tool",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Simple Memory": {
+      "ai_memory": [
+        [
+          {
+            "node": "AI Agent",
+            "type": "ai_memory",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "d7832032-f610-4fa5-b5e0-e892f292ef3d",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "pEcdqUmhTDWLFs0z",
+  "tags": []
+}

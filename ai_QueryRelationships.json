@@ -1,0 +1,497 @@
+{
+  "name": "ai/QueryRelationships",
+  "nodes": [
+    {
+      "parameters": {
+        "public": true,
+        "initialMessages": "Hi there! 👋\nWelcome to Insolvency.AI",
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.chatTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -416,
+        -48
+      ],
+      "id": "0ecd0630-0d51-4341-8f3d-ac8d05057564",
+      "name": "When chat message received",
+      "webhookId": "2157975e-1670-43b2-9b1a-260969f690c2"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7373601d-fb91-464e-bf67-6650b4a08c62",
+              "name": "question",
+              "value": "={{ $json.chatInput }}",
+              "type": "string"
+            },
+            {
+              "id": "dc1ac1c1-5ea5-40e8-8643-094b315bc230",
+              "name": "tables_catalog",
+              "value": "ins_companies: contains info about companies ins_relations: contains relationships for companies, directors, liquidations, CVA:Corporate-Voluntary-Arrangement, Administrations, Property-transfer, Disqualification",
+              "type": "string"
+            },
+            {
+              "id": "adaa1eba-3bf9-465f-8ddf-e9b66caa463f",
+              "name": "tables_schema",
+              "value": "CREATE TABLE ins_relations (     coll varchar(100) NOT NULL,     type_rel varchar(50) NOT NULL,     company_id varchar(50) NOT NULL,     director_id varchar(50),     metadata text,  -- json field (use ::json to cast and ->> operators to query) );  CREATE TABLE ins_company (     name  varchar(250) NOT NULL,     company_number varchar(250),     company_id varchar(250),     category varchar(250),     account_category  varchar(250) NOT NULL,     country varchar(250),     status varchar(250),     metadata text, -- json field (use ::json to cast and ->> operators to query) );",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -48,
+        48
+      ],
+      "id": "51df9981-b45d-48a0-8b1a-92f0c064b7d0",
+      "name": "TableCatalog"
+    },
+    {
+      "parameters": {
+        "promptType": "define",
+        "text": "={{ $json.question }}",
+        "hasOutputParser": true,
+        "options": {
+          "systemMessage": "=You're a PostgreSQL generator specialized AIAssistant. \nYou should return the sql ready to be used without additional details\nGiven an input question generate a sintaticaly correct sql query to satisfy the answer.\nAlways limit query to 10 rows unless its an aggregate query or the user has specified a specific rowcount. Remember that relationships and metadata are exclusive. Use subqueries to combine different relationships\nAlways include company_id in the generated sql\nHere's the tables schema\nCREATE TABLE ins_relations (\n    type_rel varchar(50) NOT NULL,\n    company_id varchar(50) NOT NULL,\n    director_id varchar(50),\n    metadata json,  -- json field \n);\nHere's the distribution of type_rel\n count |                   type_rel\n-------+----------------------------------------------\n     1 | corporate-voluntary-arrangement-moratorium\n    20 | administration-order\n     1 | foreign-insolvency\n  2839 | liquidation\n  2428 | creditors-voluntary-liquidation\n     3 | moratorium\n   313 | in-administration\n    74 | corporate-voluntary-arrangement\n     4 | receivership\n  1515 | members-voluntary-liquidation\n   107 | administrative-receiver\n    32 | has-property\n   253 | receiver-manager\n   712 | compulsory-liquidation\n 10000 | has-officer\n     7 | voluntary-arrangement\n    86 | live-receiver-manager-on-at-least-one-charge\n\nProperty Metadata example (only for type_rel=\"has-property\"):\ncompany_id  |  metadata |\n------------+--------\n81923       | {\"counties\": {\"NOTTINGHAMSHIRE\": 1}, \"tenures\": {\"Freehold\": 1}, \"transfers\": {}, \"max\": 52000, \"min\": 0, \"avg\": 52000.0, \"count\": 1}\n292       | {\"counties\": {\"SURREY\": 1}, \"max\": 52000, \"min\": 0, \"avg\": 52000.0, \"count\": 1}\n\nLook for locations:\n* metadata::text ILIKE '%surrey%'\nGet Property-count for a company:\nSELECT company_id, (metadata::jsonb->>'count') as property_count FROM ins_relations WHERE type_rel = 'has-property' and company_id='<id>'"
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.agent",
+      "typeVersion": 1.9,
+      "position": [
+        192,
+        80
+      ],
+      "id": "5eaab5a0-043a-4cc2-8c7d-0bc791e134e3",
+      "name": "QueryGen"
+    },
+    {
+      "parameters": {
+        "schemaType": "manual",
+        "inputSchema": "{\n  \"required\": [\"output\"]\n}"
+      },
+      "type": "@n8n/n8n-nodes-langchain.outputParserStructured",
+      "typeVersion": 1.2,
+      "position": [
+        432,
+        320
+      ],
+      "id": "13e108df-f9f3-4d51-8859-d037ef3b19f7",
+      "name": "output_parser"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nvar input = $input.all();\nvar json = input[0].json;\n\nif (json.output && typeof json.output == 'object' && json.output.query) {\n  json.output = json.output.query;\n  json.sql = json.output.query;\n} else if (json.output && typeof json.output==='string') {\n  json.sql = json.output\n}\nreturn input;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        528,
+        128
+      ],
+      "id": "0b15807a-4bbe-412d-b485-e124cb7064fe",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "55a49a16-1fa9-4830-8d11-d5cf8011317b",
+              "name": "results",
+              "value": "={{ $json.results }}",
+              "type": "string"
+            },
+            {
+              "id": "7285d68a-3494-4972-8bc0-8ac094f95bed",
+              "name": "sql",
+              "value": "={{ $('Code').item.json.sql }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        1232,
+        -64
+      ],
+      "id": "f5a6c24e-83b4-43f6-94bf-4b4a6730c679",
+      "name": "SaveResults"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\nvar input = $input.all();\nconsole.log(\"INPUT: \", input);\n// var json = input[0].json;\n\n// if (json.output && typeof json.output == 'object' && json.output.query) {\n//   json.output = json.output.query;\n// }\nreturn input;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1152,
+        160
+      ],
+      "id": "28b54500-d834-4d03-9a11-03fff585f393",
+      "name": "Code1"
+    },
+    {
+      "parameters": {
+        "aggregate": "aggregateAllItemData",
+        "destinationFieldName": "results",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.aggregate",
+      "typeVersion": 1,
+      "position": [
+        992,
+        -64
+      ],
+      "id": "4892bcc3-1c6e-4172-be6a-e5f6adaeb922",
+      "name": "Aggregate"
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "QueryRelationships",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -464,
+        320
+      ],
+      "id": "f8c57b20-8fd2-4f41-8070-f1d53ad60a2b",
+      "name": "Webhook",
+      "webhookId": "8e2fa344-be41-4774-8f12-9369976a34d4"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        1344,
+        368
+      ],
+      "id": "9f5fd48c-1728-4baf-8692-0f6dfcdba23b",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "value": "=gpt-4o",
+          "mode": "id"
+        },
+        "options": {
+          "temperature": 0
+        }
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatOpenAi",
+      "typeVersion": 1.2,
+      "position": [
+        272,
+        368
+      ],
+      "id": "1ff966cd-9afa-4381-9451-7feb8d987d96",
+      "name": "OpenAI Chat Model",
+      "credentials": {
+        "openAiApi": {
+          "id": "gjb6DABv1Wab3MP4",
+          "name": "openai-kay"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.output }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        720,
+        192
+      ],
+      "id": "59668172-e5b0-4f96-a611-ae77cee69369",
+      "name": "Postgres",
+      "credentials": {
+        "postgres": {
+          "id": "ESEsiIoiAbrfmEln",
+          "name": "postgres_insolvency"
+        }
+      },
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "model": {
+          "__rl": true,
+          "mode": "list",
+          "value": "claude-3-7-sonnet-20250219",
+          "cachedResultName": "Claude 3.7 Sonnet"
+        },
+        "options": {}
+      },
+      "type": "@n8n/n8n-nodes-langchain.lmChatAnthropic",
+      "typeVersion": 1.3,
+      "position": [
+        80,
+        368
+      ],
+      "id": "f9e046b1-5e44-4177-8e83-b066be16a860",
+      "name": "Anthropic Chat Model",
+      "credentials": {
+        "anthropicApi": {
+          "id": "DKrBn0pYDtehv6PF",
+          "name": "claude-api"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "55a49a16-1fa9-4830-8d11-d5cf8011317b",
+              "name": "results",
+              "value": "=[]",
+              "type": "string"
+            },
+            {
+              "id": "7285d68a-3494-4972-8bc0-8ac094f95bed",
+              "name": "sql",
+              "value": "={{ $('Code').item.json.sql }}",
+              "type": "string"
+            },
+            {
+              "id": "009d4b8d-0b48-4d05-824f-13c0b2c226f2",
+              "name": "is_error",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "8f3b7ad4-96d1-4a39-b260-e5ef3bb568af",
+              "name": "error",
+              "value": "={{ json }}",
+              "type": "object"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        960,
+        448
+      ],
+      "id": "4a78bcac-1d17-4419-8f19-76f3d2e6d83b",
+      "name": "SetError"
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f5560ba9-4fca-4257-b784-eaa913e54193",
+              "name": "chatInput",
+              "value": "={{ $json.body.chatInput }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -224,
+        224
+      ],
+      "id": "6a0e0627-465f-494c-b6bb-ef6f6278edc5",
+      "name": "SetChatinput"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "When chat message received": {
+      "main": [
+        [
+          {
+            "node": "TableCatalog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "TableCatalog": {
+      "main": [
+        [
+          {
+            "node": "QueryGen",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "QueryGen": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "output_parser": {
+      "ai_outputParser": [
+        [
+          {
+            "node": "QueryGen",
+            "type": "ai_outputParser",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "Postgres",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SaveResults": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate": {
+      "main": [
+        [
+          {
+            "node": "SaveResults",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "SetChatinput",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Postgres": {
+      "main": [
+        [
+          {
+            "node": "Aggregate",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "SetError",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Anthropic Chat Model": {
+      "ai_languageModel": [
+        []
+      ]
+    },
+    "OpenAI Chat Model": {
+      "ai_languageModel": [
+        [
+          {
+            "node": "QueryGen",
+            "type": "ai_languageModel",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SetError": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "SetChatinput": {
+      "main": [
+        [
+          {
+            "node": "TableCatalog",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "417cfd98-a553-422e-b1e0-f3d6a33a18c6",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "rjtSBTwmk6R2tVaE",
+  "tags": []
+}

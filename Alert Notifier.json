@@ -1,0 +1,238 @@
+{
+  "name": "Alert Notifier",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {}
+          ]
+        }
+      },
+      "name": "Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        -1008,
+        112
+      ],
+      "id": "6b0137ba-26d1-4a77-bf90-286b16eb9e87"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT a.id AS alert_id, a.company_id, a.company_name, a.current_risk, a.previous_risk, a.alert_message, w.watchlist_id, wl.name AS watchlist_name, u.id AS user_id, u.email, u.name AS user_name FROM risk_alerts_n8n a JOIN watchlist_companies_n8n w ON a.company_id = w.company_id JOIN watchlists_n8n wl ON w.watchlist_id = wl.id JOIN users u ON wl.user_id = u.id WHERE a.notified = FALSE ORDER BY u.email, a.company_name;",
+        "options": {}
+      },
+      "name": "MySQL - Get Alerts",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2,
+      "position": [
+        -768,
+        112
+      ],
+      "id": "cfd1cd69-4d1c-408c-88a5-13bda4f4fdc1",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "// The MySQL node returns an array of items,\n// but each item is an individual alert, so we get all items as alerts array.\nconst alerts = items.map(item => item.json);\n\n// If no alerts, end workflow with message\nif (!alerts || alerts.length === 0) {\n  return [{ json: { message: \"No pending alerts\" } }];\n}\n\n// Group alerts by user email\nconst userAlerts = {};\n\nalerts.forEach(alert => {\n  const email = alert.email;\n  \n  if (!userAlerts[email]) {\n    userAlerts[email] = {\n      user_id: alert.user_id,\n      user_name: alert.user_name,\n      email: email,\n      alerts: [],\n      alert_ids: []\n    };\n  }\n  \n  userAlerts[email].alerts.push({\n    company_id: alert.company_id,\n    company_name: alert.company_name,\n    previous_risk: alert.previous_risk,\n    current_risk: alert.current_risk,\n    message: alert.alert_message,\n    watchlist_name: alert.watchlist_name\n  });\n  \n  userAlerts[email].alert_ids.push(alert.alert_id);\n});\n\n// Convert grouped object into array for further processing\nconst notifications = Object.values(userAlerts);\n\nreturn notifications.map(notification => ({ json: notification }));\n"
+      },
+      "name": "Process Alerts by User",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        -496,
+        112
+      ],
+      "id": "14eb30ee-05ce-4874-8d37-fa5feb1a35e6"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{$json[\"alerts\"].length}}",
+              "operation": "larger"
+            }
+          ]
+        }
+      },
+      "name": "If Alerts Exist",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [
+        -256,
+        112
+      ],
+      "id": "1fdb0ff4-1d9b-4515-949e-3127a0e527e6"
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Loop Notifications",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 1,
+      "position": [
+        0,
+        0
+      ],
+      "id": "6ac8d26a-93b3-4760-a874-89405e44b51c"
+    },
+    {
+      "parameters": {
+        "fromEmail": "operator@insolvency.ai",
+        "toEmail": "={{$json[\"email\"]}}",
+        "subject": "=Insolvency Risk Alerts: {{$json[\"alerts\"].length}} New Alerts",
+        "html": "<h1>Insolvency Risk Alerts</h1><p>Hello {{$json[\"user_name\"]}},</p><p>The following companies on your watchlists have risk changes:</p><table border=\"1\" cellpadding=\"5\" style=\"border-collapse: collapse; width: 100%;\"><tr style=\"background-color: #f2f2f2;\"><th>Company</th><th>Watchlist</th><th>Previous Risk</th><th>Current Risk</th><th>Alert</th></tr>{{#each alerts}}<tr><td><strong>{{this.company_name}}</strong></td><td>{{this.watchlist_name}}</td><td>{{this.previous_risk}}</td><td style=\"background-color: {{#if (this.current_risk === 'Critical')}}#ff0000{{else if (this.current_risk === 'High')}}#ff9900{{else if (this.current_risk === 'Medium')}}#ffcc00{{else}}#00cc00{{/if}};\"><strong>{{this.current_risk}}</strong></td><td>{{this.message}}</td></tr>{{/each}}</table><p>To view more details, please visit your dashboard.</p>",
+        "options": {}
+      },
+      "name": "Send Email",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [
+        272,
+        0
+      ],
+      "id": "ffb1dacf-1206-456d-85fc-6c92cd4fe788",
+      "credentials": {
+        "smtp": {
+          "id": "8sWU4GuxFrsmUGRr",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "functionCode": "return [{ json: { alert_ids: $json[\"alert_ids\"] } }];"
+      },
+      "name": "Mark Alert IDs",
+      "type": "n8n-nodes-base.function",
+      "typeVersion": 1,
+      "position": [
+        512,
+        0
+      ],
+      "id": "db08efb6-8306-4832-abb4-d325022acfaf"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE risk_alerts_n8n SET notified = TRUE WHERE id IN ({{ $json[\"alert_ids\"].join(\",\") }});",
+        "options": {}
+      },
+      "name": "MySQL - Mark Notified",
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2,
+      "position": [
+        768,
+        0
+      ],
+      "id": "2279523e-7424-4416-93a9-5f8cccafc083",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule": {
+      "main": [
+        [
+          {
+            "node": "MySQL - Get Alerts",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL - Get Alerts": {
+      "main": [
+        [
+          {
+            "node": "Process Alerts by User",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Alerts by User": {
+      "main": [
+        [
+          {
+            "node": "If Alerts Exist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Alerts Exist": {
+      "main": [
+        [],
+        [
+          {
+            "node": "Loop Notifications",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop Notifications": {
+      "main": [
+        [
+          {
+            "node": "Send Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email": {
+      "main": [
+        [
+          {
+            "node": "Mark Alert IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Alert IDs": {
+      "main": [
+        [
+          {
+            "node": "MySQL - Mark Notified",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "8f03ee06-fbaf-4a1d-bd7d-5b474f8bdf67",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "MulXa0keV1AHc3TO",
+  "tags": []
+}

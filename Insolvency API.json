@@ -1,0 +1,729 @@
+{
+  "name": "Insolvency API",
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "const apiKey = items[0].json.headers[\"x-api-key\"]; \nif (!apiKey) {\n  return [{\n    json: {\n      success: false,\n      error: \"Missing API key\",\n      status: 401\n    }\n  }];\n}\n\n// Extract the endpoint path and method\n//const path = $node[\"Webhook Company\"].json.path;\nconst method = items[0].json.method;\nconst queryParams = items[0].json.query || {};\n\nconst webhookUrl = items[0].json.webhookUrl;\n\n// Fallback if webhookUrl is missing\nif (!webhookUrl) {\n  return [{ json: { error: \"webhookUrl not found in input\" } }];\n}\n\n// Use regex or string methods to extract the path\nconst pathUrl = webhookUrl.replace(/^https?:\\/\\/[^/]+/, '');\n\nconst path = pathUrl.substring(pathUrl.indexOf('/api'));\n//const path =$input.first().json.headers.path\n\n\n// Return data for the next node\nreturn [{\n  json: {\n    apiKey,\n    path,\n    method,\n    queryParams,\n    validRequest: true\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -160,
+        0
+      ],
+      "id": "3292a34a-03cf-4bab-923b-738d46922354",
+      "name": "Code",
+      "notes": "wfwfsfd"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  u.id AS user_id, \n  u.name, \n  u.email,\n  u.subscription_tier,\n  u.subscription_expiry\nFROM api_keys_n8n k\nJOIN users_n8n u ON k.user_id = u.id\nWHERE k.api_key = '{{ $json.apiKey }}'\nAND k.is_active = TRUE\nAND (u.subscription_expiry IS NULL OR u.subscription_expiry >= CURDATE());",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        80,
+        0
+      ],
+      "id": "62100817-9c62-4316-969b-b4c92549b97f",
+      "name": "MySQL",
+      "notesInFlow": false,
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      },
+      "notes": "{}"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "9607bfea-b90e-49bf-b851-188b8b50f345",
+              "leftValue": "=$node[\"MySQL\"]",
+              "rightValue": "No fields - node executed",
+              "operator": {
+                "type": "string",
+                "operation": "notContains"
+              }
+            },
+            {
+              "id": "4a44b971-a950-40ee-b7db-07840e2cb490",
+              "leftValue": "$node[\"MySQL\"].json[0]",
+              "rightValue": "undefined",
+              "operator": {
+                "type": "string",
+                "operation": "notEquals"
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {
+          "ignoreCase": false
+        }
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        288,
+        0
+      ],
+      "id": "03a14ea9-da00-4fb7-9542-d5dd813bc739",
+      "name": "If"
+    },
+    {
+      "parameters": {
+        "jsCode": "const userData = $node[\"MySQL\"].json;\nconst userId = userData.user_id;\n\nreturn [{\n  json: {\n    user: userData,\n    updateQuery: `UPDATE api_keys_n8n SET last_used = NOW() WHERE user_id = '${userId}'`\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        512,
+        -96
+      ],
+      "id": "51d45bf4-5100-4fe0-81bb-35289c40b724",
+      "name": "Update Last Used"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.updateQuery }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        688,
+        -96
+      ],
+      "id": "b8f2c0df-102c-483f-94a4-67bec1bf9a62",
+      "name": "MySQL1",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "ecc5d1f1-1525-40e9-8987-85d0b9955c88",
+                    "leftValue": "={{ $('Code').item.json.path }}",
+                    "rightValue": "/api/v1/company",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "company"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "32c20ced-61bd-4063-8298-a222b65022d0",
+                    "leftValue": "={{ $('Code').item.json.path }}",
+                    "rightValue": "/api/v1/risk",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "risk"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose",
+                  "version": 2
+                },
+                "conditions": [
+                  {
+                    "id": "407143ec-02a7-434f-95ff-407208041005",
+                    "leftValue": "={{ $('Code').item.json.path }}",
+                    "rightValue": "/api/v1/search",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals",
+                      "name": "filter.operator.equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "search"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {
+          "fallbackOutput": "extra"
+        }
+      },
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3.2,
+      "position": [
+        864,
+        -128
+      ],
+      "id": "22917d56-e20a-4aaf-8c72-52915674ca9e",
+      "name": "Switch"
+    },
+    {
+      "parameters": {
+        "jsCode": "const params = $('Code').first().json.queryParams;\nconst companyId = params.id || '';\n\n// Verify required parameters\nif (!companyId) {\n  return [{\n    json: {\n      success: false,\n      error: \"Missing company ID\",\n      status: 400\n    }\n  }];\n}\n\nconst query = \n`SELECT \n  cd.id,\n  cd.name,\n  cd.status,\n  cd.category,\n  cd.incorporation_date,\n  concat(cd.reg_add_line_1, \" \", cd.reg_add_line_2, \" \", cd.reg_add_post_town, \" \", cd.reg_add_county,\" \",cd.reg_add_country, \" \", cd.reg_add_post_code) as address,\n  (cd.sic_text_1) as sic_codes,\n  \n  /* Get latest risk score */\n  (SELECT risk_score FROM risk_scores \n   WHERE company_id = cd.id \n   ORDER BY score_date DESC LIMIT 1) AS risk_score,\n   \n   \n   (SELECT risk_category FROM risk_scores \n   WHERE company_id = cd.id \n   ORDER BY score_date DESC LIMIT 1) AS risk_category,\n   \n   \n   /* Get officers count */\n  (SELECT COUNT(*) FROM company_officers \n   WHERE company_id = cd.id \n   AND resigned_on IS NULL) AS active_officers,\n   \n   \n   /* Get charges count */\n  (SELECT COUNT(*) FROM company_charges_transactions \n   WHERE company_charges_id = cd.id) AS charges_count,\n   \n   /* Get CCJs count */\n  (SELECT COUNT(*) FROM ccod_data \n   WHERE company_registration_no_1 = cd.id) AS ccj_count\n  \nFROM company_details cd\nWHERE cd.id = '${companyId}'\nLIMIT 1`;\n\n\nreturn [{ json: { query } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -336
+      ],
+      "id": "441b8e3e-01a0-45f4-a535-63b18bf3931a",
+      "name": "Code1",
+      "notesInFlow": false
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1312,
+        -336
+      ],
+      "id": "1635e35f-d8e0-4726-89aa-f3c0898f9597",
+      "name": "MySQL2",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const companyData = items[0].json || null;\n\nif (!companyData || Object.keys(companyData).length === 0) {\n  return [{\n    json: {\n      success: false,\n      error: \"Company not found\",\n      status: 404\n    }\n  }];\n}\n\n// Format the response\nreturn [{\n  json: {\n    success: true,\n    data: companyData,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1520,
+        -336
+      ],
+      "id": "18412882-cca0-4a94-9f80-45b6e1209449",
+      "name": "Code2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const params = $('Code').first().json.queryParams;\nconst userData = $('Update Last Used').first().json.user;\nconst tier = userData.subscription_tier;\n\nlet query;\n\nif (params.id) {\n  // Company-specific risk query\n  query = `\n  SELECT \n    rs.company_id,\n    rs.company_name,\n    rs.risk_score,\n    rs.risk_category,\n    rs.risk_factors,\n    rs.score_date\n  FROM risk_scores rs\n  WHERE rs.company_id = '${params.id}'\n  ORDER BY rs.score_date DESC\n  LIMIT 10;\n  `;\n}else{\n\n  // Query for high risk companies\n  const limit = tier === 'basic' ? 10 : (tier === 'professional' ? 50 : 100);\n\n  query = `\n  SELECT \n    rs.company_id,\n    rs.company_name,\n    rs.risk_score,\n    rs.risk_category,\n    ${tier !== 'basic' ? 'rs.risk_factors,' : ''}\n    rs.score_date\n  FROM risk_scores rs\n  WHERE rs.risk_category IN ('High', 'Critical')\n  ORDER BY rs.risk_score DESC\n  LIMIT ${limit};\n  `;\n  \n}\n\n\nreturn [{ json: { query } }];\n\n"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -224
+      ],
+      "id": "d32640e2-91b4-4236-8444-1f7cc9a25bf0",
+      "name": "Code3"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1312,
+        -224
+      ],
+      "id": "febe81d5-77b0-4491-aca8-6ef8a92f20c6",
+      "name": "MySQL3",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const riskData = items[0].json || null;\n\nreturn [{\n  json: {\n    success: true,\n    data: riskData,\n    count: riskData.length,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        -208
+      ],
+      "id": "ab939962-97fc-4afe-b1a8-e983a61042ee",
+      "name": "Code4"
+    },
+    {
+      "parameters": {
+        "jsCode": "const params = $('Code').first().json.queryParams;\nconst userData = $('Update Last Used').first().json.user;\nconst tier = userData.subscription_tier;\n\n// Get search term and validate\nconst searchTerm = params.q || '';\n\nif (!searchTerm || searchTerm.length < 2) {\n  return [{\n    json: {\n      success: false,\n      error: \"Search term must be at least 2 characters\",\n      status: 400\n    }\n  }];\n}\n\n// Define limit based on tier\nconst limit = tier === 'basic' ? 10 : (tier === 'professional' ? 30 : 50);\n\n\n// Create query\nconst query = `\nSELECT \n  cd.id,\n  cd.number,\n  cd.name,\n  cd.status,\n  cd.category,\n  \n  /* Get latest risk info */\n  (SELECT risk_category FROM risk_scores \n   WHERE company_id = cd.id \n   ORDER BY score_date DESC LIMIT 1) AS risk_category\n  \nFROM company_details cd\nWHERE cd.name LIKE '%${searchTerm}%'\nORDER BY \n  CASE WHEN cd.name LIKE '${searchTerm}%' THEN 0\n       WHEN cd.name LIKE '% ${searchTerm}%' THEN 1\n       ELSE 2\n  END,\n  cd.name\nLIMIT ${limit};\n`;\n\nreturn [{ json: { query } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1088,
+        -80
+      ],
+      "id": "07d3ce6f-e63d-4cdf-9187-fc573421e1f0",
+      "name": "Code5"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "{{ $json.query }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        1312,
+        -80
+      ],
+      "id": "0805a910-8dd6-45ce-93f1-2880cef50a20",
+      "name": "MySQL4",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const searchResults = items[0].json || null;\n\nreturn [{\n  json: {\n    success: true,\n    data: searchResults,\n    count: searchResults.length,\n    timestamp: new Date().toISOString()\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1552,
+        -64
+      ],
+      "id": "5c29448d-d3e8-457b-9180-96f6eb283732",
+      "name": "Code6"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get the response from any of the endpoints\nconst data = items[0].json;\n\n// Set appropriate status code\nlet statusCode = 200;\nif (data.status) {\n  statusCode = data.status;\n  delete data.status;\n}\n\n// Return formatted response with headers\nreturn [{\n  json: {\n    responseCode: statusCode,\n    responseData: data\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1872,
+        -160
+      ],
+      "id": "5bb188ec-46a1-4395-b31d-5d36bdc4b48c",
+      "name": "Code7"
+    },
+    {
+      "parameters": {
+        "respondWith": "allIncomingItems",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.2,
+      "position": [
+        2048,
+        -176
+      ],
+      "id": "12dee818-5bb4-40ad-b1ee-31d3207d06dd",
+      "name": "Respond to Webhook"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n\n// Return formatted response with headers\nreturn [{\n  json: {\n    responseCode: 404,\n    status:404,\n    responseData: {\"success\": false, \"error\": \"Endpoint not found\", \"status\": 404}\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1104,
+        80
+      ],
+      "id": "3f5a8545-3c49-4049-a73b-ac82b8270765",
+      "name": "Code8"
+    },
+    {
+      "parameters": {
+        "path": "/api/v1/risk",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        0
+      ],
+      "id": "45383d92-6f07-4bdf-9134-abe1c67c9396",
+      "name": "Webhook Risk",
+      "webhookId": "52f24b7d-a8d6-43e5-8fd7-527f3ef9b82a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ke4FH8bZIsRSBQeh",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "/api/v1/company",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        -176
+      ],
+      "id": "c982dd99-e8b3-4076-9bbd-9cf67aafb569",
+      "name": "Webhook Company",
+      "webhookId": "52f24b7d-a8d6-43e5-8fd7-527f3ef9b82a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ke4FH8bZIsRSBQeh",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "path": "/api/v1/search",
+        "authentication": "headerAuth",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        -384,
+        208
+      ],
+      "id": "a4fcb4f4-a56f-4909-a06c-109bb1d6a6f4",
+      "name": "Webhook Search",
+      "webhookId": "52f24b7d-a8d6-43e5-8fd7-527f3ef9b82a",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "Ke4FH8bZIsRSBQeh",
+          "name": "Header Auth account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL": {
+      "main": [
+        [
+          {
+            "node": "If",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "If": {
+      "main": [
+        [
+          {
+            "node": "Update Last Used",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [],
+        []
+      ]
+    },
+    "Update Last Used": {
+      "main": [
+        [
+          {
+            "node": "MySQL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL1": {
+      "main": [
+        [
+          {
+            "node": "Switch",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Switch": {
+      "main": [
+        [
+          {
+            "node": "Code1",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code3",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Code8",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code1": {
+      "main": [
+        [
+          {
+            "node": "MySQL2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL2": {
+      "main": [
+        [
+          {
+            "node": "Code2",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code3": {
+      "main": [
+        [
+          {
+            "node": "MySQL3",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL3": {
+      "main": [
+        [
+          {
+            "node": "Code4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code5": {
+      "main": [
+        [
+          {
+            "node": "MySQL4",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL4": {
+      "main": [
+        [
+          {
+            "node": "Code6",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code2": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code4": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code6": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code7": {
+      "main": [
+        [
+          {
+            "node": "Respond to Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code8": {
+      "main": [
+        [
+          {
+            "node": "Code7",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Risk": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Company": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook Search": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "2a580197-9449-4cc1-b887-e821bd55d447",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "8FH18vmELTfuae7W",
+  "tags": []
+}

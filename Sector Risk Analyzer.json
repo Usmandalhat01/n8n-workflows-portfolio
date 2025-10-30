@@ -1,0 +1,226 @@
+{
+  "name": "Sector Risk Analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -944,
+        -96
+      ],
+      "id": "ddbc13f5-14f9-46e0-a167-1e06902416fd",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  LEFT(sic_text_1, 5) AS sector_code,\n  COUNT(*) AS total_companies\nFROM company_details\nWHERE status = 'active'\n  AND sic_text_1 IS NOT NULL\n  AND sic_text_1 != ''\n  AND sic_text_1 NOT LIKE 'None Supplied%'\nGROUP BY LEFT(sic_text_1, 5)\nHAVING sector_code IS NOT NULL AND sector_code != '';\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -736,
+        -96
+      ],
+      "id": "7d321af6-f6cf-4bfd-a37f-d88c53663c31",
+      "name": "Extract Sector Data",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  LEFT(cd.sic_text_1, 5) AS sector_code,\n  COUNT(*) AS insolvency_count\nFROM company_details cd\nJOIN (\n  SELECT DISTINCT company_number\n  FROM gazette_notice\n  WHERE notice_type IN ('Winding-up petition', 'Winding-up order')\n    AND earliest_publish_date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)\n) i \nON cd.number COLLATE utf8mb4_unicode_ci = i.company_number COLLATE utf8mb4_unicode_ci\nWHERE cd.status = 'active'\n  AND cd.sic_text_1 IS NOT NULL\n  AND cd.sic_text_1 != ''\n  AND cd.sic_text_1 NOT LIKE 'None Supplied%'\nGROUP BY LEFT(cd.sic_text_1, 5)\nHAVING sector_code IS NOT NULL\n  AND sector_code != '';\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -544,
+        -96
+      ],
+      "id": "6c3795a9-57ca-4148-a830-823cdcf29510",
+      "name": "Get Insolvency Data By Sector",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Get sector data\n   const sectorTotals = items[0].json;\n   const sectorInsolvencies = items[1].json;\n   \n   // Map to track sector names (simplified in this example)\n   const sectorNames = {\n     '62': 'Information Technology',\n     '56': 'Food and Beverage Service',\n     '47': 'Retail Trade',\n     '41': 'Construction',\n     '70': 'Management Consultancy',\n     // Add more mappings as needed\n   };\n   \n   // Combine data\n   const sectorMap = {};\n   \n   // First populate with total companies\n   sectorTotals.forEach(entry => {\n     const code = entry.sector_code;\n     sectorMap[code] = {\n       sector_code: code,\n       sector_name: sectorNames[code] || `Sector ${code}`,\n       active_companies: entry.total_companies,\n       insolvency_count: 0,\n       insolvency_rate: 0\n     };\n   });\n   \n   // Then add insolvency counts\n   sectorInsolvencies.forEach(entry => {\n     const code = entry.sector_code;\n     if (sectorMap[code]) {\n       sectorMap[code].insolvency_count = entry.insolvency_count;\n       // Calculate rate per 10,000 companies\n       sectorMap[code].insolvency_rate = \n         (entry.insolvency_count / sectorMap[code].active_companies) * 10000;\n     }\n   });\n   \n   // Convert to array for further processing\n   const sectorMetrics = Object.values(sectorMap);\n   \n   // Calculate national average\n   const totalCompanies = sectorMetrics.reduce((sum, sector) => sum + sector.active_companies, 0);\n   const totalInsolvencies = sectorMetrics.reduce((sum, sector) => sum + sector.insolvency_count, 0);\n   const nationalRate = (totalInsolvencies / totalCompanies) * 10000;\n   \n   // Add variance from national average\n   const enrichedMetrics = sectorMetrics.map(sector => {\n     // Add analysis date\n     const today = new Date().toISOString().slice(0, 10);\n     \n     // Add variance and region (null for national)\n     return {\n       ...sector,\n       region_code: null,\n       variance_from_national: ((sector.insolvency_rate / nationalRate) - 1) * 100, // percentage\n       analysis_date: today\n     };\n   });\n   \n   return [{ json: { sectors: enrichedMetrics } }];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -336,
+        -96
+      ],
+      "id": "b9a9ec73-a8dc-4944-b38f-21021a1c628b",
+      "name": "Calculate Sector Metrics"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "sector_risk_metrics_n8n",
+          "mode": "list",
+          "cachedResultName": "sector_risk_metrics_n8n"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -144,
+        -96
+      ],
+      "id": "4db307ff-ee98-44ad-9c10-0401e5ce3106",
+      "name": "Save Sector Metrics",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n  SUBSTRING_INDEX(cd.sic_codes, ',', 1) AS sector_code,\n  LEFT(cd.registered_office_address->>\"$.postal_code\", 2) AS region_code,\n  COUNT(*) AS insolvency_count\nFROM company_details cd\nJOIN (\n  SELECT DISTINCT company_number \n  FROM (\n    SELECT company_number \n    FROM gazette_notice \n    WHERE notice_type IN ('Winding-up petition', 'Winding-up order') \n      AND earliest_publish_date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)\n    UNION\n    SELECT company_number \n    FROM insolvency_cases\n    WHERE case_date > DATE_SUB(CURDATE(), INTERVAL 1 YEAR)\n  ) AS insolvencies\n) i \n  ON cd.number COLLATE utf8mb4_unicode_ci = i.company_number COLLATE utf8mb4_unicode_ci\nGROUP BY \n  SUBSTRING_INDEX(cd.sic_codes, ',', 1),\n  LEFT(cd.registered_office_address->>\"$.postal_code\", 2)\nHAVING \n  sector_code IS NOT NULL AND sector_code != ''\n  AND region_code IS NOT NULL AND region_code != '';\n",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        272,
+        -96
+      ],
+      "id": "c60617cf-f00c-4d42-bda5-2a573f025686",
+      "name": "For Regional Insolvencies",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n     SUBSTRING_INDEX(cd.sic_codes, ',', 1) AS sector_code,\n     LEFT(cd.registered_office_address->>\"$.postal_code\", 2) AS region_code,\n     COUNT(*) AS total_companies\n   FROM company_details cd\n   WHERE company_status = 'active'\n   GROUP BY \n     SUBSTRING_INDEX(cd.sic_codes, ',', 1),\n     LEFT(cd.registered_office_address->>\"$.postal_code\", 2)\n   HAVING \n     sector_code IS NOT NULL AND sector_code != '' AND\n     region_code IS NOT NULL AND region_code != '';",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        64,
+        -96
+      ],
+      "id": "ba11d20c-9a6e-4b5b-a68e-6b906e590d41",
+      "name": "Regional Sector Analysis",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Extract Sector Data",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract Sector Data": {
+      "main": [
+        [
+          {
+            "node": "Get Insolvency Data By Sector",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Insolvency Data By Sector": {
+      "main": [
+        [
+          {
+            "node": "Calculate Sector Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calculate Sector Metrics": {
+      "main": [
+        [
+          {
+            "node": "Save Sector Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Sector Metrics": {
+      "main": [
+        [
+          {
+            "node": "Regional Sector Analysis",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Regional Sector Analysis": {
+      "main": [
+        [
+          {
+            "node": "For Regional Insolvencies",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "de616bce-c185-433c-a8a2-17f2194d44d0",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "ASGyhhXKMAeYyjrK",
+  "tags": []
+}

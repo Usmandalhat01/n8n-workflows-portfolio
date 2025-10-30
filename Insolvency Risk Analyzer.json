@@ -1,0 +1,162 @@
+{
+  "name": "Insolvency Risk Analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 3
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        0,
+        0
+      ],
+      "id": "a4afa893-1c6f-4f56-a8ef-9df033c42e2a",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  cd.number AS company_number,\n  cd.id AS company_id,\n  cd.name,\n  \n  /* Filing History Indicators */\n  (SELECT DATEDIFF(NOW(), MAX(main_date)) \n   FROM company_filing_history  cfh\n   WHERE cfh.company_id = cd.id) AS days_since_last_filing,\n  \n  /* Officer Changes */\n  (SELECT COUNT(*) \n   FROM company_officers co\n   WHERE co.company_id = cd.id \n   AND appointed_on > DATE_SUB(NOW(), INTERVAL 1 YEAR)) AS recent_appointments,\n  \n  (SELECT COUNT(*) \n   FROM company_officers co\n   WHERE co.company_id = cd.id\n   AND resigned_on > DATE_SUB(NOW(), INTERVAL 1 YEAR)) AS recent_resignations,\n  \n  /* Charges */\n  (SELECT COUNT(*) \n   FROM company_charges_transactions cct\n   WHERE cct.company_charges_id = cd.id \n   AND delivered_on > DATE_SUB(NOW(), INTERVAL 1 YEAR)) AS recent_charges,\n  \n  /* County Court Judgments */\n  /*(SELECT COUNT(*) \n   FROM ccod_data  cc\n   WHERE cc.company_registration_no_1 = cd.number or \n         cc.company_registration_no_4 = cd.number) AS ccj_count,*/\n  \n  /* Gazette Notices */\n  (SELECT COUNT(*) \n   FROM gazette_notice \n   WHERE description COLLATE utf8mb4_general_ci LIKE CONCAT('%', cd.name COLLATE utf8mb4_general_ci, '%')\n   AND notice_type = 'Winding-up petition') AS winding_up_petitions,\n  \n  /* Court Cases */\n  (SELECT COUNT(*) \n   FROM company_cases cs\n   WHERE cs.company_id = cd.id) AS court_cases\n  \nFROM company_details cd\nWHERE cd.status = 'active'\nLIMIT 500;",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        224,
+        0
+      ],
+      "id": "4104dd7c-33cf-4a08-92b0-10aa8d7ccaa4",
+      "name": "MySQL",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const WEIGHTS = {\n  DAYS_SINCE_FILING: 0.05,\n  FILING_THRESHOLD: 180,\n  RECENT_APPOINTMENTS: 5,\n  RECENT_RESIGNATIONS: 8,\n  RECENT_CHARGES: 10,\n  CCJ: 15,\n  WINDING_UP_PETITION: 50,\n  COURT_CASE: 20\n};\n\nreturn items.map(item => {\n  const company = item.json;\n  let score = 0;\n  const riskFactors = [];\n\n  if (company.days_since_last_filing > WEIGHTS.FILING_THRESHOLD) {\n    const filingScore = (company.days_since_last_filing - WEIGHTS.FILING_THRESHOLD) * WEIGHTS.DAYS_SINCE_FILING;\n    score += filingScore;\n    riskFactors.push({\n      factor: \"Late Filing\",\n      description: `No filings in ${Math.round(company.days_since_last_filing/30)} months`,\n      impact: filingScore.toFixed(1)\n    });\n  }\n\n  if (company.recent_appointments > 0) {\n    const appointmentScore = company.recent_appointments * WEIGHTS.RECENT_APPOINTMENTS;\n    score += appointmentScore;\n    riskFactors.push({\n      factor: \"Director Appointments\",\n      description: `${company.recent_appointments} new directors in past year`,\n      impact: appointmentScore.toFixed(1)\n    });\n  }\n\n  if (company.recent_resignations > 0) {\n    const resignationScore = company.recent_resignations * WEIGHTS.RECENT_RESIGNATIONS;\n    score += resignationScore;\n    riskFactors.push({\n      factor: \"Director Resignations\",\n      description: `${company.recent_resignations} directors resigned in past year`,\n      impact: resignationScore.toFixed(1)\n    });\n  }\n\n  if (company.recent_charges > 0) {\n    const chargesScore = company.recent_charges * WEIGHTS.RECENT_CHARGES;\n    score += chargesScore;\n    riskFactors.push({\n      factor: \"Recent Charges\",\n      description: `${company.recent_charges} new charges in past year`,\n      impact: chargesScore.toFixed(1)\n    });\n  }\n\n  if (company.ccj_count > 0) {\n    const ccjScore = company.ccj_count * WEIGHTS.CCJ;\n    score += ccjScore;\n    riskFactors.push({\n      factor: \"County Court Judgments\",\n      description: `${company.ccj_count} CCJs registered`,\n      impact: ccjScore.toFixed(1)\n    });\n  }\n\n  if (company.winding_up_petitions > 0) {\n    const petitionScore = company.winding_up_petitions * WEIGHTS.WINDING_UP_PETITION;\n    score += petitionScore;\n    riskFactors.push({\n      factor: \"Winding-up Petitions\",\n      description: `${company.winding_up_petitions} winding-up petitions`,\n      impact: petitionScore.toFixed(1)\n    });\n  }\n\n  if (company.court_cases > 0) {\n    const courtScore = company.court_cases * WEIGHTS.COURT_CASE;\n    score += courtScore;\n    riskFactors.push({\n      factor: \"Court Cases\",\n      description: `${company.court_cases} court cases`,\n      impact: courtScore.toFixed(1)\n    });\n  }\n\n  let riskCategory = 'Low';\n  if (score > 75) {\n    riskCategory = 'Critical';\n  } else if (score > 50) {\n    riskCategory = 'High';\n  } else if (score > 25) {\n    riskCategory = 'Medium';\n  }\n\n  return {\n    json: {\n      company_id: company.company_id,\n      company_name: company.name,\n      risk_score: score,\n      risk_category: riskCategory,\n      risk_factors: JSON.stringify(riskFactors),\n      score_date: new Date().toISOString().slice(0, 10)\n    }\n  };\n});"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        448,
+        0
+      ],
+      "id": "b4660373-d5aa-433e-af40-36148e6556bd",
+      "name": "Code"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "risk_scores",
+          "mode": "list",
+          "cachedResultName": "risk_scores"
+        },
+        "dataMode": "defineBelow",
+        "valuesToSend": {
+          "values": [
+            {
+              "column": "company_id",
+              "value": "={{ $json.company_id }}"
+            },
+            {
+              "column": "company_name",
+              "value": "={{ $json.company_name }}"
+            },
+            {
+              "column": "risk_score",
+              "value": "={{ $json.risk_score }}"
+            },
+            {
+              "column": "risk_category",
+              "value": "={{ $json.risk_category }}"
+            },
+            {
+              "column": "risk_factors",
+              "value": "={{ $json.risk_factors }}"
+            }
+          ]
+        },
+        "options": {
+          "queryBatching": "single"
+        }
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        672,
+        0
+      ],
+      "id": "31f037f5-e25c-4cad-90af-3509d0233d7f",
+      "name": "MySQL1",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "MySQL",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL": {
+      "main": [
+        [
+          {
+            "node": "Code",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Code": {
+      "main": [
+        [
+          {
+            "node": "MySQL1",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "MySQL1": {
+      "main": [
+        []
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "a1f73d25-167e-4d8e-b81d-72714d2a17f3",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "gHVBmdqnUGAOxaIw",
+  "tags": []
+}

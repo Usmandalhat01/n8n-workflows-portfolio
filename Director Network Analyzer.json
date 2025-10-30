@@ -1,0 +1,209 @@
+{
+  "name": "Director Network Analyzer",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "weeks",
+              "triggerAtDay": [
+                1
+              ]
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -304,
+        32
+      ],
+      "id": "c903f9a2-d8e3-459e-b812-1e7dbd50a431",
+      "name": "Schedule Trigger"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT \n     o.id AS director_id,\n     o.name AS director_name,\n     CAST(o.company_id AS CHAR) AS company_number,\n     cd.name as company_name,\n     o.appointed_on,\n     o.resigned_on\n   FROM company_officers o\n   JOIN company_details cd ON o.company_id = cd.id\n   WHERE o.officer_role IN ('director', 'corporate-director')\n   LIMIT 10000",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        -80,
+        32
+      ],
+      "id": "0171e8eb-3395-4829-9924-9f55f702f3e6",
+      "name": "Query Director Relationships",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "director_networks_n8n",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        624,
+        -64
+      ],
+      "id": "2306b9d6-ee68-4fe2-a4bd-4a27d5c52537",
+      "name": "Save Director Networks",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Loop over input items and add a new field called 'myNewField' to the JSON of each one\n\nreturn $input.first().json.networks;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        -64
+      ],
+      "id": "c6480cce-1e07-4556-b7fb-d14688d18a8b",
+      "name": "Get Director Networks"
+    },
+    {
+      "parameters": {
+        "table": {
+          "__rl": true,
+          "value": "director_connections_n8n",
+          "mode": "name"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.mySql",
+      "typeVersion": 2.4,
+      "position": [
+        624,
+        192
+      ],
+      "id": "5bcb59e9-9970-4c7b-93b6-2154e1eb597b",
+      "name": "Save Director Connections",
+      "credentials": {
+        "mySql": {
+          "id": "CRd5JbWb7lZmljJQ",
+          "name": "MySQL account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const appointments = $input.all();\nconst directorCompanies = {};\nconst companyDirectors = {};\n\n// Populate the maps\nappointments.forEach(app => {\n  // Map directors to companies\n  if (!directorCompanies[app.director_id]) {\n    directorCompanies[app.director_id] = {\n      name: app.director_name,\n      companies: {}\n    };\n  }\n  directorCompanies[app.director_id].companies[app.company_number] = {\n    name: app.company_name,\n    appointed: app.appointed_on,\n    resigned: app.resigned_on\n  };\n  \n  // Map companies to directors\n  if (!companyDirectors[app.company_number]) {\n    companyDirectors[app.company_number] = {\n      name: app.company_name,\n      directors: {}\n    };\n  }\n  companyDirectors[app.company_number].directors[app.director_id] = {\n    name: app.director_name,\n    appointed: app.appointed_on,\n    resigned: app.resigned_on\n  };\n});\n\n// Generate connections\nconst connections = [];\nconst directorNetworks = [];\nconst processedConnections = new Set();\n\n// Process each company with multiple directors\nObject.keys(companyDirectors).forEach(companyNumber => {\n  const company = companyDirectors[companyNumber];\n  const directors = Object.keys(company.directors);\n  \n  // Skip companies with only one director\n  if (directors.length < 2) return;\n  \n  // Generate all possible connections between directors\n  for (let i = 0; i < directors.length; i++) {\n    for (let j = i + 1; j < directors.length; j++) {\n      const dir1 = directors[i];\n      const dir2 = directors[j];\n      \n      // Create unique connection ID (alphabetically sorted)\n      const connectionId = [dir1, dir2].sort().join('-');\n      \n      // Skip if already processed\n      if (processedConnections.has(connectionId)) continue;\n      processedConnections.add(connectionId);\n      \n      // Find all companies shared by these directors\n      const sharedCompanies = [];\n      Object.keys(companyDirectors).forEach(compNum => {\n        const comp = companyDirectors[compNum];\n        if (comp.directors[dir1] && comp.directors[dir2]) {\n          sharedCompanies.push(compNum);\n        }\n      });\n      \n      // Calculate connection strength (1 base + 0.5 per additional company)\n      const connectionStrength = 1 + (sharedCompanies.length - 1) * 0.5;\n      \n      // Add connection\n      connections.push({\n        director1_id: dir1,\n        director1_name: company.directors[dir1].name,\n        director2_id: dir2,\n        director2_name: company.directors[dir2].name,\n        shared_companies: sharedCompanies.length,\n        connection_strength: connectionStrength,\n        created_date: new Date().toISOString().slice(0, 10)\n      });\n    }\n  }\n});\n\n// Calculate network metrics for each director\nObject.keys(directorCompanies).forEach(directorId => {\n  const director = directorCompanies[directorId];\n  const companyCount = Object.keys(director.companies).length;\n  \n  // Count connections\n  const directorConnections = connections.filter(\n    conn => conn.director1_id === directorId || conn.director2_id === directorId\n  );\n  \n  // Calculate risk score based on number of companies and connections\n  const connectionCount = directorConnections.length;\n  let riskScore = 0;\n  \n  // Risk factors: many companies, many connections\n  if (companyCount > 10) riskScore += 30;\n  else if (companyCount > 5) riskScore += 15;\n  else if (companyCount > 3) riskScore += 5;\n  \n  if (connectionCount > 20) riskScore += 30;\n  else if (connectionCount > 10) riskScore += 15;\n  else if (connectionCount > 5) riskScore += 5;\n  \n  // Determine risk category\n  let riskCategory = 'Low';\n  if (riskScore > 50) riskCategory = 'High';\n  else if (riskScore > 25) riskCategory = 'Medium';\n  \n  directorNetworks.push({\n    director_id: directorId,\n    director_name: director.name,\n    company_count: companyCount,\n    connection_count: connectionCount,\n    risk_score: riskScore,\n    risk_category: riskCategory,\n    analysis_date: new Date().toISOString().slice(0, 10)\n  });\n});\n\nreturn [{\n  json: {\n    connections: connections,\n    networks: directorNetworks\n  }\n}];"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        144,
+        32
+      ],
+      "id": "1caa4e63-f473-4dd5-9016-b75f91b03182",
+      "name": "Process Director Connections and Networks"
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst data = $input.all();\n\nreturn $input.first().json.connections;"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        384,
+        192
+      ],
+      "id": "9471faaa-646d-4aad-bb28-ebd3e1b60f19",
+      "name": "Get Director Connections"
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Query Director Relationships",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Query Director Relationships": {
+      "main": [
+        [
+          {
+            "node": "Process Director Connections and Networks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Director Networks": {
+      "main": [
+        [
+          {
+            "node": "Save Director Networks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Process Director Connections and Networks": {
+      "main": [
+        [
+          {
+            "node": "Get Director Connections",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Get Director Networks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Director Connections": {
+      "main": [
+        [
+          {
+            "node": "Save Director Connections",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "896c0833-79aa-44c7-aede-80cb46712888",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "08055b552e6611728d9e3d82803686d88d87514124536a81604c916c12efc555"
+  },
+  "id": "kZEuwD6aU14jKCKV",
+  "tags": []
+}
